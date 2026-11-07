@@ -38,10 +38,10 @@ import { Pool } from "pg";
 import { ensureDbReady, getPglite } from "../db";
 import { emailAndPasswordEnabled } from "./email-password";
 import { GATE_PROVIDER_ID, gateIdentitySessions } from "./gate-session.server";
-import { GROK_PROVIDERS } from "./providers";
+import { AUTH_PROVIDERS } from "./providers";
 import { pgliteDialect } from "./pglite-dialect";
 import {
-  GROK_ISSUER_DEFAULT,
+  ISSUER_DEFAULT,
   PREVIEW_ALLOWED_HOSTS,
   PREVIEW_CLIENT_ID,
   PREVIEW_CLIENT_SECRET,
@@ -57,11 +57,11 @@ void ensureDbReady();
  * restart clears both the secret and PGLite together.
  */
 const globalAuthRef = globalThis as typeof globalThis & {
-  __grokAuthPreviewSecret__?: string;
+  __authPreviewSecret__?: string;
 };
 function previewAuthSecret(): string {
-  globalAuthRef.__grokAuthPreviewSecret__ ??= randomBytes(32).toString("hex");
-  return globalAuthRef.__grokAuthPreviewSecret__;
+  globalAuthRef.__authPreviewSecret__ ??= randomBytes(32).toString("hex");
+  return globalAuthRef.__authPreviewSecret__;
 }
 
 /** Read an env var, treating empty/whitespace as unset. */
@@ -77,7 +77,7 @@ const authDisabled = env("VITE_AUTH_ENABLED") === "false";
 // Broker federation creds: the deployer injects a per-app client when deployed;
 // otherwise fall back to the shared live-preview client, which the broker accepts
 // for any `*.grok-sandbox.com` callback (see `./preview`).
-const grokIssuer = env("GROK_AUTH_ISSUER") ?? GROK_ISSUER_DEFAULT;
+const issuer = env("GROK_AUTH_ISSUER") ?? ISSUER_DEFAULT;
 const grokClientId = env("GROK_AUTH_CLIENT_ID") ?? PREVIEW_CLIENT_ID;
 const grokClientSecret = env("GROK_AUTH_CLIENT_SECRET") ?? PREVIEW_CLIENT_SECRET;
 
@@ -131,7 +131,7 @@ const databaseUrl = env("DATABASE_URL");
 // Discovery would cost an extra network hop to the broker before the popup can
 // even redirect to Google/X — the live-preview popup felt stuck on the app for
 // that whole round-trip. These paths match the broker's discovery document.
-const issuerBase = grokIssuer.replace(/\/+$/, "");
+const issuerBase = issuer.replace(/\/+$/, "");
 const grokAuthorizationUrl = `${issuerBase}/api/auth/oauth2/authorize`;
 const grokTokenUrl = `${issuerBase}/api/auth/oauth2/token`;
 const grokUserInfoUrl = `${issuerBase}/api/auth/oauth2/userinfo`;
@@ -152,7 +152,7 @@ export const SESSION_TOKEN_COOKIE = "__Host-grok-auth.session_token";
 // breaking brackets (models often trip on the conditional plugin spread).
 const grokOAuthPlugin = authConfigured
   ? genericOAuth({
-      config: GROK_PROVIDERS.map(({ providerId, idp }) => ({
+      config: AUTH_PROVIDERS.map(({ providerId, idp }) => ({
         providerId,
         clientId: grokClientId as string,
         clientSecret: grokClientSecret as string,
@@ -195,7 +195,7 @@ export const auth = betterAuth({
     accountLinking: {
       enabled: true,
       trustedProviders: [
-        ...GROK_PROVIDERS.map((p) => p.providerId),
+        ...AUTH_PROVIDERS.map((p) => p.providerId),
         GATE_PROVIDER_ID,
       ],
       // X's synthetic email is never "verified", so don't gate linking on the
@@ -258,4 +258,4 @@ export function readSessionToken(): string | null {
 
 // Re-exported for convenience; the array lives in the dependency-free
 // `providers.ts` so the client can import it too.
-export { GROK_PROVIDERS } from "./providers";
+export { AUTH_PROVIDERS } from "./providers";
